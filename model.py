@@ -180,8 +180,14 @@ def root_mean_squared_error(y_true, y_pred):
     rmse=rmse**0.5
     return rmse
 
-# Step 17 - r_squared (not yet solved)
-# TODO: implement
+# Step 17 - r_squared
+def r_squared(y_true, y_pred):
+    # TODO: Compute R^2 = 1 - SS_res/SS_tot (return 0.0 if SS_tot is 0)...
+    sse=np.sum(np.square(y_true-y_pred))
+    sst=np.sum(np.square(y_true-np.mean(y_true)))
+    if sst==0 :
+        return 0.0
+    return 1-sse/sst
 
 # Step 18 - residual_summary (not yet solved)
 # TODO: implement
