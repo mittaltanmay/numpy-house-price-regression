@@ -251,8 +251,26 @@ def make_train_val_test(X, y, train_ratio, val_ratio, seed):
     y_test=y[test_ind]
     return {"X_train":x_train,"y_train":y_train,"X_val":X_val,"y_val":y_val,"X_test":x_test,"y_test":y_test}
 
-# Step 22 - standardize_and_add_bias (not yet solved)
-# TODO: implement
+# Step 22 - standardize_and_add_bias
+def standardize_and_add_bias(splits):
+    # TODO: Fit standardizer on train, transform all splits, prepend bias...
+    mean=np.mean(splits['X_train'],axis=0)
+    std=np.std(splits['X_train'],axis=0)
+    for i in range(len(std)):
+        if std[i]==0.0:
+            std[i]=1.0
+    x_train_std=(splits['X_train']-mean)/std
+    x_val_std=(splits['X_val']-mean)/std
+    x_test_std=(splits['X_test']-mean)/std
+    bias=np.ones(splits['X_train'].shape[0],dtype=float)
+    bias1=np.ones(splits['X_val'].shape[0],dtype=float)
+    bias2=np.ones(splits['X_test'].shape[0],dtype=float)
+
+    x_train_std=np.insert(x_train_std,0,bias,axis=1)
+    x_val_std=np.insert(x_val_std,0,bias1,axis=1)
+    x_test_std=np.insert(x_test_std,0,bias2,axis=1)
+    std_splits={"X_train":x_train_std,"X_test":x_test_std,"X_val":x_val_std,"y_train":splits["y_train"],"y_test":splits["y_test"],"y_val":splits["y_val"]}
+    return (std_splits,mean,std)
 
 # Step 23 - evaluate_predictions (not yet solved)
 # TODO: implement
