@@ -281,6 +281,150 @@ def evaluate_predictions(y_true, y_pred):
     res=residual_summary(y_true,y_pred)
     return {"mae":mae,"rmse":rmse,"r2":r2,"residual_summary":res}
 
-# Step 24 - house_price_pipeline (not yet solved)
-# TODO: implement
+# Step 24 - house_price_pipeline
+def house_price_pipeline(X, y, ratio_num_idx, ratio_den_idx, cat_labels=None, train_ratio=0.7, val_ratio=0.15, seed=42, iqr_k=1.5):
+    # TODO: Run full clean->featurize->split->standardize->OLS->evaluate pipeline...
+    X = np.asarray(X, dtype=float)
+
+    col_mean = np.nanmean(X, axis=0)
+
+    inds = np.where(np.isnan(X))
+    X[inds] = np.take(col_mean, inds[1])
+
+    # ---------------------------------------------------------
+    # 2. Compute IQR bounds and clip columns
+    # ---------------------------------------------------------
+    q1 = np.percentile(X, 25, axis=0)
+    q3 = np.percentile(X, 75, axis=0)
+
+    iqr = q3 - q1
+
+    lower = q1 - iqr_k * iqr
+    upper = q3 + iqr_k * iqr
+
+    X = np.clip(X, lower, upper)
+
+    # ---------------------------------------------------------
+    # 3. Create ratio feature
+    # ---------------------------------------------------------
+    x_num = X[:, ratio_num_idx]
+    x_den = X[:, ratio_den_idx]
+
+    # Same idea as make_ratio_feature()
+    # Avoid division by zero
+    ratio = np.divide(
+        x_num,
+        x_den,
+        out=np.zeros_like(x_num, dtype=float),
+        where=x_den != 0
+    )
+
+    # Append ratio as a new column
+    X = np.column_stack((X, ratio))
+
+    # ---------------------------------------------------------
+    # 4. One-hot encode categorical labels
+    # ---------------------------------------------------------
+    if cat_labels is not None:
+
+        unique = sorted(set(cat_labels))
+
+        mapped = {}
+        for i in range(len(unique)):
+            mapped[unique[i]] = i
+
+        encoded = []
+
+        for label in cat_labels:
+            temp = [0.0] * len(unique)
+            temp[mapped[label]] = 1.0
+            encoded.append(temp)
+
+        cat_encoded = np.array(encoded, dtype=float)
+
+        # Append categorical features
+        X = np.column_stack((X, cat_encoded))
+
+    # ---------------------------------------------------------
+    # 5. Train / validation / test split
+    # ---------------------------------------------------------
+    np.random.seed(seed)
+
+    indices = np.random.permutation(X.shape[0])
+    N = X.shape[0]
+
+    train_end = int(N * train_ratio)
+    val_end = train_end + int(N * val_ratio)
+
+    train_ind = indices[:train_end]
+    val_ind = indices[train_end:val_end]
+    test_ind = indices[val_end:N]
+
+    X_train = X[train_ind]
+    y_train = y[train_ind]
+
+    X_val = X[val_ind]
+    y_val = y[val_ind]
+
+    X_test = X[test_ind]
+    y_test = y[test_ind]
+
+    # ---------------------------------------------------------
+    # 6. Standardize using ONLY training statistics
+    # ---------------------------------------------------------
+    mean = np.mean(X_train, axis=0)
+    std = np.std(X_train, axis=0)
+
+    for i in range(len(std)):
+        if std[i] == 0.0:
+            std[i] = 1.0
+
+    X_train_std = (X_train - mean) / std
+    X_val_std = (X_val - mean) / std
+    X_test_std = (X_test - mean) / std
+
+    # ---------------------------------------------------------
+    # 7. Add bias column
+    # ---------------------------------------------------------
+    bias_train = np.ones(X_train_std.shape[0], dtype=float)
+    bias_val = np.ones(X_val_std.shape[0], dtype=float)
+    bias_test = np.ones(X_test_std.shape[0], dtype=float)
+
+    X_train_std = np.insert(X_train_std, 0, bias_train, axis=1)
+    X_val_std = np.insert(X_val_std, 0, bias_val, axis=1)
+    X_test_std = np.insert(X_test_std, 0, bias_test, axis=1)
+
+    # ---------------------------------------------------------
+    # 8. OLS using Normal Equation
+    # ---------------------------------------------------------
+    # w = (X^T X)^(-1) X^T y
+    #
+    # pinv is safer than directly using inv()
+    w = np.linalg.pinv(X_train_std.T @ X_train_std) @ \
+        X_train_std.T @ y_train
+
+    # ---------------------------------------------------------
+    # 9. Predictions
+    # ---------------------------------------------------------
+    y_train_pred = X_train_std @ w
+    y_val_pred = X_val_std @ w
+    y_test_pred = X_test_std @ w
+
+    # ---------------------------------------------------------
+    # 10. Evaluate
+    # ---------------------------------------------------------
+    train_metrics = evaluate_predictions(y_train, y_train_pred)
+    val_metrics = evaluate_predictions(y_val, y_val_pred)
+    test_metrics = evaluate_predictions(y_test, y_test_pred)
+
+    # ---------------------------------------------------------
+    # 11. Return everything useful
+    # ---------------------------------------------------------
+    return {
+        "theta": w,
+        "y_test": y_test,
+        "y_test_pred": y_test_pred,
+        "val_metrics": val_metrics,
+        "test_metrics": test_metrics
+    }
 
